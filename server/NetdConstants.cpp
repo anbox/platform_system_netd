@@ -41,6 +41,7 @@ const char * const IP_PATH = "/system/bin/ip";
 const char * const ADD = "add";
 const char * const DEL = "del";
 
+#if 0
 static void logExecError(const char* argv[], int res, int status) {
     const char** argp = argv;
     std::string args = "";
@@ -51,8 +52,14 @@ static void logExecError(const char* argv[], int res, int status) {
     }
     ALOGE("exec() res=%d, status=%d for %s", res, status, args.c_str());
 }
+#endif
 
 static int execIptablesCommand(int argc, const char *argv[], bool silent) {
+    (void) argc;
+    (void) argv;
+    (void) silent;
+
+#if 0
     int res;
     int status;
 
@@ -68,6 +75,9 @@ static int execIptablesCommand(int argc, const char *argv[], bool silent) {
             return ECHILD;
     }
     return WEXITSTATUS(status);
+#else
+    return 0;
+#endif
 }
 
 static int execIptables(IptablesTarget target, bool silent, va_list args) {
