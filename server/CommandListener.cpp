@@ -104,6 +104,7 @@ private:
 
 }  // namespace
 
+#if 0
 /**
  * List of module chains to be created, along with explicit ordering. ORDERING
  * IS CRITICAL, AND SHOULD BE TRIPLE-CHECKED WITH EACH CHANGE.
@@ -179,6 +180,7 @@ static void createChildChains(IptablesTarget target, const char* table, const ch
         execIptables(target, "-t", table, "-A", parentChain, "-j", *childChain, NULL);
     } while (*(++childChain) != NULL);
 }
+#endif
 
 void CommandListener::registerLockingCmd(FrameworkCommand *cmd, android::RWLock& lock) {
     registerCmd(new LockingFrameworkCommand(cmd, lock));
@@ -211,6 +213,7 @@ CommandListener::CommandListener() :
      * otherwise DROP/REJECT.
      */
 
+#if 0
     // Create chains for children modules
     createChildChains(V4V6, "filter", "INPUT", FILTER_INPUT);
     createChildChains(V4V6, "filter", "FORWARD", FILTER_FORWARD);
@@ -220,7 +223,9 @@ CommandListener::CommandListener() :
     createChildChains(V4V6, "mangle", "FORWARD", MANGLE_FORWARD);
     createChildChains(V4, "nat", "PREROUTING", NAT_PREROUTING);
     createChildChains(V4, "nat", "POSTROUTING", NAT_POSTROUTING);
+#endif
 
+#if 0
     // Let each module setup their child chains
     setupOemIptablesHook();
 
@@ -229,6 +234,9 @@ CommandListener::CommandListener() :
 
     /* Does DROPs in FORWARD by default */
     gCtls->natCtrl.setupIptablesHooks();
+#endif
+
+#if 0
     /*
      * Does REJECT in INPUT, OUTPUT. Does counting also.
      * No DROP/REJECT allowed later in netfilter-flow hook order.
@@ -241,10 +249,13 @@ CommandListener::CommandListener() :
     gCtls->idletimerCtrl.setupIptablesHooks();
 
     gCtls->bandwidthCtrl.enableBandwidthControl(false);
+#endif
 
+#if 0
     if (int ret = RouteController::Init(NetworkController::LOCAL_NET_ID)) {
         ALOGE("failed to initialize RouteController (%s)", strerror(-ret));
     }
+#endif
 }
 
 CommandListener::InterfaceCmd::InterfaceCmd() :
