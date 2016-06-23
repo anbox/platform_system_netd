@@ -248,10 +248,12 @@ int FwmarkServer::processClient(SocketClient* client, int* socketFd) {
 
     fwmark.permission = permission;
 
+#if 0
     if (setsockopt(*socketFd, SOL_SOCKET, SO_MARK, &fwmark.intValue,
                    sizeof(fwmark.intValue)) == -1) {
         return -errno;
     }
+#endif
 
     return 0;
 }
