@@ -71,7 +71,9 @@ auto BandwidthController::iptablesRestoreFunction = execIptablesRestore;
 namespace {
 
 const char ALERT_GLOBAL_NAME[] = "globalAlert";
+#if 0
 const int  MAX_CMD_ARGS = 32;
+#endif
 const int  MAX_CMD_LEN = 1024;
 const int  MAX_IFACENAME_LEN = 64;
 const int  MAX_IPT_OUTPUT_LINE_LEN = 256;
@@ -211,6 +213,11 @@ int BandwidthController::StrncpyAndCheck(char *buffer, const char *src, size_t b
 
 int BandwidthController::runIptablesCmd(const char *cmd, IptJumpOp jumpHandling,
                                         IptIpVer iptVer, IptFailureLog failureHandling) {
+    (void) cmd;
+    (void) jumpHandling;
+    (void) iptVer;
+    (void) failureHandling;
+#if 0
     char buffer[MAX_CMD_LEN];
     const char *argv[MAX_CMD_ARGS];
     int argc = 0;
@@ -263,6 +270,9 @@ int BandwidthController::runIptablesCmd(const char *cmd, IptJumpOp jumpHandling,
             fullCmd.c_str());
     }
     return res;
+#else
+    return 0;
+#endif
 }
 
 void BandwidthController::flushCleanTables(bool doClean) {
