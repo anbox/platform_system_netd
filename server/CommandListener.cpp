@@ -251,11 +251,9 @@ CommandListener::CommandListener() :
     gCtls->bandwidthCtrl.enableBandwidthControl(false);
 #endif
 
-#if 0
     if (int ret = RouteController::Init(NetworkController::LOCAL_NET_ID)) {
         ALOGE("failed to initialize RouteController (%s)", strerror(-ret));
     }
-#endif
 }
 
 CommandListener::InterfaceCmd::InterfaceCmd() :
