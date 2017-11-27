@@ -88,7 +88,12 @@ struct fib_rule_uid_range {
 };
 
 const uint16_t NETLINK_REQUEST_FLAGS = NLM_F_REQUEST | NLM_F_ACK;
-const uint16_t NETLINK_CREATE_REQUEST_FLAGS = NETLINK_REQUEST_FLAGS | NLM_F_CREATE | NLM_F_EXCL;
+// Don't create rules with NLM_F_EXCL, because operations such as changing network permissions rely
+// on make-before-break. The kernel did not complain about duplicate rules until ~4.9, at which
+// point it started returning EEXIST. See for example b/69607866 . We can't just ignore the EEXIST
+// because if we hit it, the rule was not created, but we will think it was, and we'll then trip up
+// trying to delete it.
+const uint16_t NETLINK_RULE_CREATE_FLAGS = NETLINK_REQUEST_FLAGS | NLM_F_CREATE;
 
 const sockaddr_nl NETLINK_ADDRESS = {AF_NETLINK, 0, 0, 0};
 
@@ -348,7 +353,7 @@ WARN_UNUSED_RESULT int modifyIpRule(uint16_t action, uint32_t priority, uint8_t 
         { PADDING_BUFFER,    oifPadding },
     };
 
-    uint16_t flags = (action == RTM_NEWRULE) ? NETLINK_CREATE_REQUEST_FLAGS : NETLINK_REQUEST_FLAGS;
+    uint16_t flags = (action == RTM_NEWRULE) ? NETLINK_RULE_CREATE_FLAGS : NETLINK_REQUEST_FLAGS;
     for (size_t i = 0; i < ARRAY_SIZE(AF_FAMILIES); ++i) {
         rule.family = AF_FAMILIES[i];
         if (int ret = sendNetlinkRequest(action, flags, iov, ARRAY_SIZE(iov))) {
@@ -455,7 +460,7 @@ WARN_UNUSED_RESULT int modifyIpRoute(uint16_t action, uint32_t table, const char
         { rawNexthop,    nexthop ? static_cast<size_t>(rawLength) : 0 },
     };
 
-    uint16_t flags = (action == RTM_NEWROUTE) ? NETLINK_CREATE_REQUEST_FLAGS :
+    uint16_t flags = (action == RTM_NEWROUTE) ? NETLINK_RULE_CREATE_FLAGS :
                                                 NETLINK_REQUEST_FLAGS;
     return sendNetlinkRequest(action, flags, iov, ARRAY_SIZE(iov));
 }
