@@ -130,6 +130,7 @@ int execIptablesSilently(IptablesTarget target, ...) {
 }
 
 static int execIptablesRestoreCommand(const char *cmd, const std::string& commands) {
+#if 0
     const char *argv[] = {
         cmd,
         "--noflush",  // Don't flush the whole table.
@@ -151,6 +152,10 @@ static int execIptablesRestoreCommand(const char *cmd, const std::string& comman
         ALOGE("%s failed with res=%d, status=%d", argv[0], res, status);
         return -1;
     }
+#else
+    (void) cmd;
+    (void) commands;
+#endif
 
     return 0;
 }
