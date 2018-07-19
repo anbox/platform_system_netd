@@ -73,18 +73,21 @@ const char* const ROUTE_TABLE_NAME_LEGACY_SYSTEM  = "legacy_system";
 const char* const ROUTE_TABLE_NAME_LOCAL = "local";
 const char* const ROUTE_TABLE_NAME_MAIN  = "main";
 
-// TODO: These values aren't defined by the Linux kernel, because our UID routing changes are not
-// upstream (yet?), so we can't just pick them up from kernel headers. When (if?) the changes make
-// it upstream, we'll remove this and rely on the kernel header values. For now, add a static assert
-// that will warn us if upstream has given these values some other meaning.
-const uint16_t FRA_UID_START = 18;
-const uint16_t FRA_UID_END   = 19;
-static_assert(FRA_UID_START > FRA_MAX,
-             "Android-specific FRA_UID_{START,END} values also assigned in Linux uapi. "
-             "Check that these values match what the kernel does and then update this assertion.");
+// These values are upstream, but not yet in our headers.
+// TODO: delete these definitions when updating the headers.
+const uint16_t FRA_UID_RANGE = 20;
+struct fib_rule_uid_range {
+        __u32           start;
+        __u32           end;
+};
 
 const uint16_t NETLINK_REQUEST_FLAGS = NLM_F_REQUEST | NLM_F_ACK;
-const uint16_t NETLINK_CREATE_REQUEST_FLAGS = NETLINK_REQUEST_FLAGS | NLM_F_CREATE | NLM_F_EXCL;
+// Don't create rules with NLM_F_EXCL, because operations such as changing network permissions rely
+// on make-before-break. The kernel did not complain about duplicate rules until ~4.9, at which
+// point it started returning EEXIST. See for example b/69607866 . We can't just ignore the EEXIST
+// because if we hit it, the rule was not created, but we will think it was, and we'll then trip up
+// trying to delete it.
+const uint16_t NETLINK_RULE_CREATE_FLAGS = NETLINK_REQUEST_FLAGS | NLM_F_CREATE;
 
 const sockaddr_nl NETLINK_ADDRESS = {AF_NETLINK, 0, 0, 0};
 
@@ -113,15 +116,14 @@ constexpr uint16_t U16_RTA_LENGTH(uint16_t x) {
 
 // These are practically const, but can't be declared so, because they are used to initialize
 // non-const pointers ("void* iov_base") in iovec arrays.
-rtattr FRATTR_PRIORITY  = { U16_RTA_LENGTH(sizeof(uint32_t)), FRA_PRIORITY };
-rtattr FRATTR_TABLE     = { U16_RTA_LENGTH(sizeof(uint32_t)), FRA_TABLE };
-rtattr FRATTR_FWMARK    = { U16_RTA_LENGTH(sizeof(uint32_t)), FRA_FWMARK };
-rtattr FRATTR_FWMASK    = { U16_RTA_LENGTH(sizeof(uint32_t)), FRA_FWMASK };
-rtattr FRATTR_UID_START = { U16_RTA_LENGTH(sizeof(uid_t)),    FRA_UID_START };
-rtattr FRATTR_UID_END   = { U16_RTA_LENGTH(sizeof(uid_t)),    FRA_UID_END };
+rtattr FRATTR_PRIORITY  = { U16_RTA_LENGTH(sizeof(uint32_t)),           FRA_PRIORITY };
+rtattr FRATTR_TABLE     = { U16_RTA_LENGTH(sizeof(uint32_t)),           FRA_TABLE };
+rtattr FRATTR_FWMARK    = { U16_RTA_LENGTH(sizeof(uint32_t)),           FRA_FWMARK };
+rtattr FRATTR_FWMASK    = { U16_RTA_LENGTH(sizeof(uint32_t)),           FRA_FWMASK };
+rtattr FRATTR_UID_RANGE = { U16_RTA_LENGTH(sizeof(fib_rule_uid_range)), FRA_UID_RANGE };
 
-rtattr RTATTR_TABLE     = { U16_RTA_LENGTH(sizeof(uint32_t)), RTA_TABLE };
-rtattr RTATTR_OIF       = { U16_RTA_LENGTH(sizeof(uint32_t)), RTA_OIF };
+rtattr RTATTR_TABLE     = { U16_RTA_LENGTH(sizeof(uint32_t)),           RTA_TABLE };
+rtattr RTATTR_OIF       = { U16_RTA_LENGTH(sizeof(uint32_t)),           RTA_OIF };
 
 uint8_t PADDING_BUFFER[RTA_ALIGNTO] = {0, 0, 0, 0};
 
@@ -308,6 +310,7 @@ WARN_UNUSED_RESULT int modifyIpRule(uint16_t action, uint32_t priority, uint8_t 
 
     rtattr fraIifName = { U16_RTA_LENGTH(iifLength), FRA_IIFNAME };
     rtattr fraOifName = { U16_RTA_LENGTH(oifLength), FRA_OIFNAME };
+    struct fib_rule_uid_range uidRange = { uidStart, uidEnd };
 
     iovec iov[] = {
         { NULL,              0 },
@@ -320,10 +323,8 @@ WARN_UNUSED_RESULT int modifyIpRule(uint16_t action, uint32_t priority, uint8_t 
         { &fwmark,           mask ? sizeof(fwmark) : 0 },
         { &FRATTR_FWMASK,    mask ? sizeof(FRATTR_FWMASK) : 0 },
         { &mask,             mask ? sizeof(mask) : 0 },
-        { &FRATTR_UID_START, isUidRule ? sizeof(FRATTR_UID_START) : 0 },
-        { &uidStart,         isUidRule ? sizeof(uidStart) : 0 },
-        { &FRATTR_UID_END,   isUidRule ? sizeof(FRATTR_UID_END) : 0 },
-        { &uidEnd,           isUidRule ? sizeof(uidEnd) : 0 },
+        { &FRATTR_UID_RANGE, isUidRule ? sizeof(FRATTR_UID_RANGE) : 0 },
+        { &uidRange,         isUidRule ? sizeof(uidRange) : 0 },
         { &fraIifName,       iif != IIF_NONE ? sizeof(fraIifName) : 0 },
         { iifName,           iifLength },
         { PADDING_BUFFER,    iifPadding },
@@ -332,7 +333,7 @@ WARN_UNUSED_RESULT int modifyIpRule(uint16_t action, uint32_t priority, uint8_t 
         { PADDING_BUFFER,    oifPadding },
     };
 
-    uint16_t flags = (action == RTM_NEWRULE) ? NETLINK_CREATE_REQUEST_FLAGS : NETLINK_REQUEST_FLAGS;
+    uint16_t flags = (action == RTM_NEWRULE) ? NETLINK_RULE_CREATE_FLAGS : NETLINK_REQUEST_FLAGS;
     for (size_t i = 0; i < ARRAY_SIZE(AF_FAMILIES); ++i) {
         rule.family = AF_FAMILIES[i];
         if (int ret = sendNetlinkRequest(action, flags, iov, ARRAY_SIZE(iov))) {
@@ -439,7 +440,7 @@ WARN_UNUSED_RESULT int modifyIpRoute(uint16_t action, uint32_t table, const char
         { rawNexthop,    nexthop ? static_cast<size_t>(rawLength) : 0 },
     };
 
-    uint16_t flags = (action == RTM_NEWROUTE) ? NETLINK_CREATE_REQUEST_FLAGS :
+    uint16_t flags = (action == RTM_NEWROUTE) ? NETLINK_RULE_CREATE_FLAGS :
                                                 NETLINK_REQUEST_FLAGS;
     return sendNetlinkRequest(action, flags, iov, ARRAY_SIZE(iov));
 }
